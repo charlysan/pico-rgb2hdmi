@@ -330,6 +330,9 @@ class App:
         self.auto_set = None              # BooleanVar, built with the status bar
         self._poll_busy = False
         self._missed_prev = None          # (missed_count, timestamp) for the rate
+        self.raw_history = []             # raw command history (Up/Down arrows)
+        self.raw_hist_pos = None          # None = not browsing; else history index
+        self.raw_draft = ""               # in-progress text saved while browsing
 
         root.title("pico-rgb2hdmi control panel")
         root.minsize(780, 680)
@@ -993,6 +996,10 @@ class App:
         entry = ttk.Entry(row)
         entry.pack(side="left", fill="x", expand=True, padx=6)
         entry.bind("<Return>", lambda _e: self.send_raw())
+        # Shell-style history: Up/Down browse past commands (shared between the
+        # embedded and detached incarnations of the box).
+        entry.bind("<Up>", lambda _e: self._raw_history_step(-1))
+        entry.bind("<Down>", lambda _e: self._raw_history_step(+1))
         ttk.Button(row, text="Send", command=self.send_raw).pack(side="left")
         if embedded:
             self.raw_embedded = entry
@@ -1001,9 +1008,38 @@ class App:
 
     def send_raw(self):
         cmd = self.raw.get().strip()
-        if cmd:
-            self.worker.send(cmd)
-            self.raw.delete(0, "end")
+        if not cmd:
+            return
+        self.worker.send(cmd)
+        self.raw.delete(0, "end")
+        if not self.raw_history or self.raw_history[-1] != cmd:
+            self.raw_history.append(cmd)
+            del self.raw_history[:-100]        # keep the last 100
+        self.raw_hist_pos = None
+
+    def _raw_history_step(self, direction):
+        """Replace the raw entry content with the previous/next history item.
+        Browsing starts from a saved draft of whatever was being typed, and
+        stepping past the newest entry restores that draft."""
+        if not self.raw_history:
+            return "break"
+        if self.raw_hist_pos is None:
+            if direction > 0:
+                return "break"                 # nothing newer to go to
+            self.raw_draft = self.raw.get()
+            self.raw_hist_pos = len(self.raw_history)
+        self.raw_hist_pos += direction
+        if self.raw_hist_pos < 0:
+            self.raw_hist_pos = 0
+        if self.raw_hist_pos >= len(self.raw_history):
+            self.raw_hist_pos = None
+            text = self.raw_draft
+        else:
+            text = self.raw_history[self.raw_hist_pos]
+        self.raw.delete(0, "end")
+        self.raw.insert(0, text)
+        self.raw.icursor("end")
+        return "break"
 
     # ---- console (attachable/detachable) ----
     def _build_console(self, parent):
