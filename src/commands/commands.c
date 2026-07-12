@@ -14,6 +14,7 @@
 
 int command_info_afe_error;
 int command_info_scanner_error;
+int command_info_missed_lines; // TODO: implement
 
 ///////////   GLOBALS   ///////////
 bool command_license_is_valid;
@@ -150,8 +151,35 @@ int command_on_receive(int option, const void *data, bool convert) {
                     GET_VIDEO_PROPS().vertical_front_porch, GET_VIDEO_PROPS().vertical_back_porch);
                 printf("Sampling rate: %u Hz\n", (unsigned int)GET_VIDEO_PROPS().sampling_rate);
                 // printf("Sampling phase: %d/12\n", wm8213_afe_capture_get_phase());
-                break;
                 }
+                break;
+                case 'q': {
+                // Single machine-parseable line containing all data
+                display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+                printf("STATUS slot=%d bpp=%d w=%d h=%d refresh=%d finetune=%d phase=%d "
+                       "hf=%d hb=%d vf=%d vb=%d rate=%d "
+                       "gain=%d,%d,%d offset=%d,%d,%d neg=%d "
+                       "usb=%d sync=%d hsyncns=%u vsyncns=%lu lines=%d\n",
+                    settings_get()->flags.default_display + 1,
+                    bppx_to_int(command_get_current_bppx(), color_part_all),
+                    GET_VIDEO_PROPS().width, GET_VIDEO_PROPS().height,
+                    GET_VIDEO_PROPS().refresh_rate, display->fine_tune, 0, // TODO wm8213_afe_capture_get_phase(),
+                    GET_VIDEO_PROPS().horizontal_front_porch, GET_VIDEO_PROPS().horizontal_back_porch,
+                    GET_VIDEO_PROPS().vertical_front_porch, GET_VIDEO_PROPS().vertical_back_porch,
+                    GET_VIDEO_PROPS().sampling_rate,
+                    wm8213_afe_get_gain(color_part_red), wm8213_afe_get_gain(color_part_green), wm8213_afe_get_gain(color_part_blue),
+                    wm8213_afe_get_offset(color_part_red), wm8213_afe_get_offset(color_part_green), wm8213_afe_get_offset(color_part_blue),
+                    wm8213_afe_get_negative_offset(),
+                    0, // TODO: // settings_get()->flags.usb_enabled,
+                    (int)rgbScannerGetSyncType(),
+                    // The scanner keeps the last measurement forever; report 0
+                    // once the sync detector has decayed to "none" so hosts
+                    // don't display stale rates after the source is unplugged
+                    rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetHsyncNanoSec() : 0,
+                    rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetVsyncNanoSec() : 0,
+                    rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetHorizontalLines() : 0);
+                }
+                break;
 #ifdef TEST_MODE
 			case 'k': {
 				printf("Storing key: %s\n", (const char *)data);

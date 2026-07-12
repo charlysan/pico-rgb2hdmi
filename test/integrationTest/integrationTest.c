@@ -59,6 +59,7 @@ cmd_parser_option_t options[] =
     {"capture", FALSE, NULL,  'c'},
     {"id",      FALSE, NULL,  'I'},
     {"version", FALSE, NULL,  'v'},
+    {"status",  FALSE, NULL,  'q'},
 #ifdef TEST_MODE
     {"keyset",  TRUE,  NULL,  'k'},
     {"keyget",  FALSE, NULL,  'K'},

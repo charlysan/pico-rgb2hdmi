@@ -188,6 +188,7 @@ static inline bool wm8213_afe_capture_run(uint hFrontPorch, uintptr_t buffer, ui
 
 void wm8213_afe_capture_stop();
 void wm8213_afe_capture_wait();
+uint wm8213_afe_capture_get_phase();
 uint wm8213_afe_capture_update_sampling_rate(uint sampling_rate);
 uint wm8213_afe_capture_update_bppx(color_bppx bppx, bool commit);
 uint wm8213_afe_update_gain(uint16_t red, uint16_t green, uint16_t blue, bool commit);
