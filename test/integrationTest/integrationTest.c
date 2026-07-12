@@ -38,6 +38,7 @@ uint8_t  *framebuf_8  = GET_RGB8_BUFFER(genbuf);
 uint16_t *framebuf_16 = GET_RGB16_BUFFER(genbuf);
 #define VREG_VSEL       VREG_VOLTAGE_1_20
 #define DVI_TIMING      dvi_timing_640x480p_60hz
+#define CMD_PROMPT      "rgb2hdmi> "
 
 // --------- Global register start --------- 
 struct dvi_inst     dvi0;
@@ -54,6 +55,7 @@ cmd_parser_option_t options[] =
     {"mode",    FALSE, NULL,  'm'},
     {"right",   TRUE,  NULL,  'r'},
     {"info",    TRUE,  NULL,  'i'},
+    {"show",    FALSE, NULL,  'S'},
     {"capture", FALSE, NULL,  'c'},
     {"id",      FALSE, NULL,  'I'},
     {"version", FALSE, NULL,  'v'},
@@ -139,7 +141,8 @@ void parse_command(int argc, char *const argv[]) {
     char *strValue = NULL;
     while ((option_result = cmd_parser_get_cmd(argc, argv, options, &option_index, &arg_index)) != -1) {
         strValue = options[option_index].strval;
-        printf ("Request %s<%c>(%s)\n", options[option_index].name, option_result, strValue);
+        // TODO: remove if not used
+        // printf ("Request %s<%c>(%s)\n", options[option_index].name, option_result, strValue);
 
         if (command_on_receive(option_result, strValue, true) > 0) {
             printf("Unknown command: "); cmd_parser_print_cmd(options);
@@ -148,12 +151,33 @@ void parse_command(int argc, char *const argv[]) {
 }
 
 void command_line_loop() {
-    char inputStr[48];
+    char inputStr[512];
     char *argv[6];
     int argc;
     while (1)
     {
-        gets(inputStr);
+        printf(CMD_PROMPT);
+        int len = 0;
+        while(true) {
+            int chr = getchar();
+            if (chr == '\r' || chr == '\n') {
+                putchar('\n');
+                break;
+            }
+            // Handle backspace and delete key
+            if ((chr == '\b' || chr == 127) && len > 0) {
+                len--; // Move the cursor back one position
+                printf("\b \b");
+            } else if (chr >= 32 && chr < 127 && len < (int)sizeof(inputStr) - 1) {
+                inputStr[len++] = (char)chr; 
+                putchar(chr); // Echo the character to the console
+            }
+
+        }
+        inputStr[len] = 0; // Null terminate the string
+        if (len == 0) {
+            continue;
+        }
         cmd_parser_get_argv_argc(inputStr, &argc, argv);
         parse_command(argc, argv);
     }

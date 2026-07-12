@@ -5,6 +5,7 @@
 #include "commands.h"
 #include "videoAdjust.h"
 #include "rgbScan.h"
+#include "wm8213Afe.h"
 #include "overlay.h"
 #include "security.h"
 #include "settings.h"
@@ -128,6 +129,19 @@ int command_on_receive(int option, const void *data, bool convert) {
 			case 'I':
                 printf("Device is: %s\n", security_get_uid());
 				break;
+            case 'S': {
+                display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+                printf("Mode: %dx%d@%dbppx %dHz\n", GET_VIDEO_PROPS().width, GET_VIDEO_PROPS().height,
+                    bppx_to_int(command_get_current_bppx(), color_part_all), GET_VIDEO_PROPS().refresh_rate);
+                printf("Gain: %d,%d,%d\n", wm8213_afe_get_gain(color_part_red), wm8213_afe_get_gain(color_part_green), wm8213_afe_get_gain(color_part_blue));
+                printf("Offset: %d,%d,%d negative: %d\n", wm8213_afe_get_offset(color_part_red), wm8213_afe_get_offset(color_part_green), wm8213_afe_get_offset(color_part_blue), wm8213_afe_get_negative_offset());
+                printf("Fine tune: %d\n", display->fine_tune);
+                printf("H porch front/back: %d/%d V porch front/back: %d/%d\n",
+                    GET_VIDEO_PROPS().horizontal_front_porch, GET_VIDEO_PROPS().horizontal_back_porch,
+                    GET_VIDEO_PROPS().vertical_front_porch, GET_VIDEO_PROPS().vertical_back_porch);
+                printf("Sampling rate: %u Hz\n", (unsigned int)GET_VIDEO_PROPS().sampling_rate);
+                // printf("Sampling phase: %d/12\n", wm8213_afe_capture_get_phase());
+                }
 #ifdef TEST_MODE
 			case 'k': {
 				printf("Storing key: %s\n", (const char *)data);

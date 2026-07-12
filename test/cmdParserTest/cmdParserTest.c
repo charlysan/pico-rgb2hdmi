@@ -35,7 +35,7 @@ void parse_command(int argc, char *const argv[]) {
 
     while ((option_result = cmd_parser_get_cmd(argc, argv, options, &option_index, &arg_index)) != -1) {
         strValue = options[option_index].strval;
-        printf ("Request %s<%c>(%s)\n", options[option_index].name, option_result, strValue);
+        // printf ("Request %s<%c>(%s)\n", options[option_index].name, option_result, strValue);
 
         switch (option_result) {
             case 'u':
