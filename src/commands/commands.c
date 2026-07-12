@@ -74,12 +74,21 @@ void command_enable_usb(bool status) {
 }
 
 int command_on_receive(int option, const void *data, bool convert) {
-    int   integer_value = (*(const int *) data);
-    bool  bool_value = *((char *)data) > 0;
-    
+    int   integer_value = 0;
+    bool  bool_value = false;
+
+    // In convert mode data is a string at an arbitrary offset inside the
+    // command line: it must never be dereferenced as an int, the M0+
+    // hardfaults on unaligned 32 bit reads (and the release hardfault
+    // handler silently resets the board)
     if (convert) {
-        integer_value = atoi((const char *)data);
-        bool_value = strcmp((const char *)data, "true") == 0;
+        if (data != NULL) {
+            integer_value = atoi((const char *)data);
+            bool_value = strcmp((const char *)data, "true") == 0;
+        }
+    } else if (data != NULL) {
+        integer_value = *(const int *) data;
+        bool_value = *((const char *)data) > 0;
     }
 
     switch(option) {
@@ -141,6 +150,7 @@ int command_on_receive(int option, const void *data, bool convert) {
                     GET_VIDEO_PROPS().vertical_front_porch, GET_VIDEO_PROPS().vertical_back_porch);
                 printf("Sampling rate: %u Hz\n", (unsigned int)GET_VIDEO_PROPS().sampling_rate);
                 // printf("Sampling phase: %d/12\n", wm8213_afe_capture_get_phase());
+                break;
                 }
 #ifdef TEST_MODE
 			case 'k': {
