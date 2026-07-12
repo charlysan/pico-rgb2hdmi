@@ -3,6 +3,12 @@ pico rgb2hdmi
 
 An rpi pico microprocessed rgb 2 hdmi plus rgb 2 usb on the fly converter
 -------------------------------------------------------------------------
+Date: 2026/07/12
+Version: 0.6.4
+- Add pico-rgb2hdmi control panel
+- Implement echo in serial console
+- Add new console commands: show, status, pixelw, refresh, porch, gain, finetune, offset and negoffset
+-------------------------------------------------------------------------
 Date: 2024/02/22
 Version: 0.6.4
 - Menu system for total control of gain, positive and negative offset, with RGB and unified options
