@@ -239,7 +239,7 @@ int command_on_receive(int option, const void *data, bool convert) {
                 break;
             // finetune
             case 'f': {
-                // Same units as the menu spinbox: 1 step = 1 kHz of sampling rate
+                // 1 step = 1 kHz of sampling rate
                 int max_steps = VIDEO_FINE_TUNE_MAX / 1000;
                 if (integer_value >  max_steps) { integer_value =  max_steps; }
                 if (integer_value < -max_steps) { integer_value = -max_steps; }
@@ -251,6 +251,82 @@ int command_on_receive(int option, const void *data, bool convert) {
                 wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
                 rgbScannerEnable(true);
                 printf("Fine tune set to %d (sampling rate %d Hz)\n", integer_value, GET_VIDEO_PROPS().sampling_rate);
+                }
+                break;
+            // refresh
+            case 'F': {
+                if (integer_value < 1 || integer_value > 255) {
+                    printf("Refresh rate must be 1 to 255 Hz\n");
+                    return 0;
+                }
+                display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+                display->refresh_rate = integer_value;
+                GET_VIDEO_PROPS().refresh_rate = integer_value;
+                update_sampling_rate();
+                rgbScannerEnable(false);
+                wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
+                rgbScannerEnable(true);
+                printf("Refresh set to %d Hz (sampling rate %d Hz)\n", integer_value, GET_VIDEO_PROPS().sampling_rate);
+                }
+                break; 
+            // Pixel Width
+            case 'W': {
+                int total = 0;
+                if (data == NULL || sscanf((const char *)data, "%d", &total) != 1) {
+                    printf("Pixel width %d (front %d + back %d)\n",
+                        GET_VIDEO_PROPS().horizontal_front_porch + GET_VIDEO_PROPS().horizontal_back_porch,
+                        GET_VIDEO_PROPS().horizontal_front_porch, GET_VIDEO_PROPS().horizontal_back_porch);
+                    return 0;
+                }
+                int front = GET_VIDEO_PROPS().horizontal_front_porch;
+                int back = total - front;
+                if (back < 0) {
+                    // Not enough room: pull the window left
+                    front = total;
+                    back = 0;
+                }
+                GET_VIDEO_PROPS().horizontal_front_porch = front;
+                GET_VIDEO_PROPS().horizontal_back_porch  = back;
+
+                // Changing the total horizontal porch changes the pixel clock,
+                // so recompute the sampling rate and reconfigure the AFE 
+                update_sampling_rate();
+                rgbScannerEnable(false);
+                wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
+                rgbScannerEnable(true);
+
+                printf("Pixel width %d (front %d + back %d)\n", front + back, front, back);
+                }
+                break;
+            // Porch
+            case 'P': {
+                int front = 0, back = 0;
+                int parsed = data != NULL ? sscanf((const char *)data, "%d,%d", &front, &back) : 0;
+                if (parsed < 1) {
+                    printf("Expected <front> or <front,back> raw porch values\n");
+                    return 0;
+                }
+                if (parsed == 1) {
+                    back = GET_VIDEO_PROPS().horizontal_back_porch;
+                }
+                if (front < 1)   { front = 1; }
+                if (front > 300) { front = 300; }
+                if (back  < 0)   { back  = 0; }
+                if (back  > 300) { back  = 300; }
+
+                GET_VIDEO_PROPS().horizontal_front_porch = front;
+                GET_VIDEO_PROPS().horizontal_back_porch  = back;
+
+                // Changing the total horizontal porch changes the pixel clock,
+                // so recompute the sampling rate and reconfigure the AFE 
+                update_sampling_rate();
+                rgbScannerEnable(false);
+                wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
+                rgbScannerEnable(true);
+
+                printf("H porch %d/%d (pixel width %d): capture starts %d samples after sync (sampling rate %d Hz)\n",
+                    front, back, front + back, get_video_prop_horizontal_front_porch(), GET_VIDEO_PROPS().sampling_rate);
+
                 }
                 break;
 #ifdef TEST_MODE

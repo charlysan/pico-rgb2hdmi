@@ -53,6 +53,7 @@
 
 #define AFE_SAMPLING_LIMIT           7600000 //Should be 8MSPS but proben to be less, After this value RSMP / VSMP has to be flipped
 #define AFE_PIO_FIFO_FORCE_DUMP      8
+#define AFE_LINE_EXTRA_SAMPLES       1 //Extra sample per line so the tail discard DMA always has >= 1 transfer (no zero-count chain trigger)
 #define WM8213_GAIN_BITS             (1 << 9)
 #define WM8213_GAIN_MAX              (WM8213_GAIN_BITS - 1)
 #define WM8213_POS_OFFSET_BITS       (1 << 8)
