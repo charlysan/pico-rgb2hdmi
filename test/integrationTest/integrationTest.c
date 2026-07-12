@@ -60,6 +60,10 @@ cmd_parser_option_t options[] =
     {"id",      FALSE, NULL,  'I'},
     {"version", FALSE, NULL,  'v'},
     {"status",  FALSE, NULL,  'q'},
+    {"gain",    TRUE,  NULL,  'g'},
+    {"offset",  TRUE,  NULL,  'o'},
+    {"negoffset", TRUE, NULL, 'n'},
+    {"finetune", TRUE, NULL,  'f'},
 #ifdef TEST_MODE
     {"keyset",  TRUE,  NULL,  'k'},
     {"keyget",  FALSE, NULL,  'K'},

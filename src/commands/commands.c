@@ -74,6 +74,26 @@ void command_enable_usb(bool status) {
     }
 }
 
+// Parse "r,g,b" or a single value applied to the three channels
+static bool command_parse_rgb(const char *data, int *red, int *green, int *blue) {
+    if (data == NULL) {
+        return false;
+    }
+    int cnt = sscanf(data, "%d,%d,%d", red, green, blue);
+    if (cnt == 1) {
+        *green = *red;
+        *blue = *red;
+    } else if (cnt != 3) {
+        printf("Expected <value> or <r,g,b>, got %s\n", data);
+        return false;
+    }
+    return true;
+}
+
+static inline uint8_t command_clamp_uint8(int value) {
+    return value < 0 ? 0 : (value > 255 ? 255 : value);
+}
+
 int command_on_receive(int option, const void *data, bool convert) {
     int   integer_value = 0;
     bool  bool_value = false;
@@ -153,7 +173,7 @@ int command_on_receive(int option, const void *data, bool convert) {
                 // printf("Sampling phase: %d/12\n", wm8213_afe_capture_get_phase());
                 }
                 break;
-                case 'q': {
+            case 'q': {
                 // Single machine-parseable line containing all data
                 display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
                 printf("STATUS slot=%d bpp=%d w=%d h=%d refresh=%d finetune=%d phase=%d "
@@ -178,6 +198,59 @@ int command_on_receive(int option, const void *data, bool convert) {
                     rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetHsyncNanoSec() : 0,
                     rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetVsyncNanoSec() : 0,
                     rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetHorizontalLines() : 0);
+                }
+                break;
+            // gain
+            case 'g': {
+                int red = integer_value, green = integer_value, blue = integer_value;
+                if (convert && !command_parse_rgb((const char *)data, &red, &green, &blue)) {
+                    return 0;
+                }
+                display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+                wm8213_afe_update_gain(red, green, blue, true);
+                // Read back so the stored value carries the clamping
+                display->gain.red   = wm8213_afe_get_gain(color_part_red);
+                display->gain.green = wm8213_afe_get_gain(color_part_green);
+                display->gain.blue  = wm8213_afe_get_gain(color_part_blue);
+                printf("Gain set to %d,%d,%d\n", display->gain.red, display->gain.green, display->gain.blue);
+                }
+                break;
+            // offset
+            case 'o': {
+                int red = integer_value, green = integer_value, blue = integer_value;
+                if (convert && !command_parse_rgb((const char *)data, &red, &green, &blue)) {
+                    return 0;
+                }
+                display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+                display->offset.red   = command_clamp_uint8(red);
+                display->offset.green = command_clamp_uint8(green);
+                display->offset.blue  = command_clamp_uint8(blue);
+                wm8213_afe_update_offset(display->offset.red, display->offset.green, display->offset.blue, true);
+                printf("Offset set to %d,%d,%d\n", display->offset.red, display->offset.green, display->offset.blue);
+                }
+                break;
+            // negoffset
+            case 'n': {
+                display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+                wm8213_afe_update_negative_offset(integer_value < 0 ? 0 : integer_value, true);
+                display->offset.negative = wm8213_afe_get_negative_offset();
+                printf("Negative offset set to %d\n", display->offset.negative);
+                }
+                break;
+            // finetune
+            case 'f': {
+                // Same units as the menu spinbox: 1 step = 1 kHz of sampling rate
+                int max_steps = VIDEO_FINE_TUNE_MAX / 1000;
+                if (integer_value >  max_steps) { integer_value =  max_steps; }
+                if (integer_value < -max_steps) { integer_value = -max_steps; }
+                display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+                display->fine_tune = integer_value;
+                GET_VIDEO_PROPS().fine_tune = 1000 * integer_value;
+                update_sampling_rate();
+                rgbScannerEnable(false);
+                wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
+                rgbScannerEnable(true);
+                printf("Fine tune set to %d (sampling rate %d Hz)\n", integer_value, GET_VIDEO_PROPS().sampling_rate);
                 }
                 break;
 #ifdef TEST_MODE
