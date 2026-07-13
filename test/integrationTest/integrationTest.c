@@ -67,6 +67,7 @@ cmd_parser_option_t options[] =
     {"refresh", TRUE,  NULL,  'F'},
     {"pixelw",  TRUE,  NULL,  'W'},
     {"porch",   TRUE,  NULL,  'P'},
+    {"afereg",  TRUE,  NULL,  'A'},
 #ifdef TEST_MODE
     {"keyset",  TRUE,  NULL,  'k'},
     {"keyget",  FALSE, NULL,  'K'},

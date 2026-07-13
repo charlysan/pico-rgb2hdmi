@@ -729,7 +729,6 @@ class App:
         ttk.Button(row, text="Dump", width=5,
                    command=lambda: self.worker.send("afereg dump")).pack(side="left")
 
-        self.set_enabled(row, False)
 
     def set_afereg(self):
         idx = self.afe_idx.get().strip()

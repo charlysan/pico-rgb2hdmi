@@ -195,7 +195,10 @@ uint wm8213_afe_capture_update_bppx(color_bppx bppx, bool commit);
 uint wm8213_afe_update_gain(uint16_t red, uint16_t green, uint16_t blue, bool commit);
 uint wm8213_afe_update_offset(uint8_t red, uint8_t green, uint8_t blue, bool commit);
 uint wm8213_afe_update_negative_offset(uint8_t value, bool commit);
+uint wm8213_afe_set_setup_byte(uint index, uint8_t value, bool commit);
 uint16_t wm8213_afe_get_gain(color_part part);
 uint8_t wm8213_afe_get_offset(color_part part);
 uint8_t wm8213_afe_get_negative_offset();
+uint8_t wm8213_afe_get_setup_byte(uint index);
+int  wm8213_afe_read_setup_byte(uint index, uint8_t *value);
 #endif

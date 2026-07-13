@@ -47,6 +47,12 @@ int wm8213_afe_read(uint8_t address, uint8_t *data) {
     return read_len != 1;
 }
 
+// Register addresses in the same order as the wm8213_afe_setups_t bytes
+static const uint8_t wm8213_setup_regs[WM8213_REG_SETUP_TOTAL] = { WM8213_REG_SETUP1, WM8213_REG_SETUP2, WM8213_REG_SETUP3, WM8213_REG_SETUP4, WM8213_REG_SETUP5 ,WM8213_REG_SETUP6,
+    WM8213_REG_OFFSET_DAC_RED, WM8213_REG_OFFSET_DAC_GRN, WM8213_REG_OFFSET_DAC_BLU, WM8213_REG_PGA_GAIN_LSB_RED, WM8213_REG_PGA_GAIN_MSB_RED,
+    WM8213_REG_PGA_GAIN_LSB_GRN, WM8213_REG_PGA_GAIN_MSB_GRN, WM8213_REG_PGA_GAIN_LSB_BLU, WM8213_REG_PGA_GAIN_MSB_BLU };
+
+
 // Spi configuration has almost all data constant, except configuration registers that changes
 // Those are separated to allow modifications of gain and offset 
 int wm8213_afe_spi_setup(const wm8213_afe_config_t* config, const wm8213_afe_setups_t *setups) {
@@ -304,4 +310,34 @@ uint wm8213_afe_update_negative_offset(uint8_t value, bool commit) {
 
 uint8_t wm8213_afe_get_negative_offset() {
     return wm8213_afe_capture_global.setups.setup3.rlc_dac & WM8213_NEG_OFFSET_MAX;
+}
+
+// Raw access to the 15 setup bytes.
+// Values live in the RAM copy: they are volatile, boot restores afec_cfg
+uint8_t wm8213_afe_get_setup_byte(uint index) {
+    if (index >= WM8213_REG_SETUP_TOTAL) {
+        return 0;
+    }
+    return ((const uint8_t *)&wm8213_afe_capture_global.setups)[index];
+}
+
+uint wm8213_afe_set_setup_byte(uint index, uint8_t value, bool commit) {
+    if (index >= WM8213_REG_SETUP_TOTAL) {
+        return 8;
+    }
+    ((uint8_t *)&wm8213_afe_capture_global.setups)[index] = value;
+    if (commit) {
+        return wm8213_afe_spi_setup(wm8213_afe_capture_global.config, &wm8213_afe_capture_global.setups);
+    }
+    return 0;
+}
+
+int wm8213_afe_read_setup_byte(uint index, uint8_t *value) {
+    if (index >= WM8213_REG_SETUP_TOTAL || spi_write_only_mode) {
+        return 1;
+    }
+    // The capture PIO steals the SDO pin function (PIO input still reads the
+    // pad regardless); reclaim it for SPI before reading back
+    gpio_set_function(wm8213_afe_capture_global.config->pins_spi.sdo, GPIO_FUNC_SPI);
+    return wm8213_afe_read(wm8213_setup_regs[index], value);
 }

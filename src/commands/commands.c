@@ -329,6 +329,41 @@ int command_on_receive(int option, const void *data, bool convert) {
 
                 }
                 break;
+            // afe_reg
+            case 'A': {
+                static const char *afe_reg_names[WM8213_REG_SETUP_TOTAL] = {
+                    "SETUP1", "SETUP2", "SETUP3", "SETUP4", "SETUP5", "SETUP6",
+                    "OFFSET_R", "OFFSET_G", "OFFSET_B",
+                    "GAIN_LSB_R", "GAIN_MSB_R", "GAIN_LSB_G", "GAIN_MSB_G", "GAIN_LSB_B", "GAIN_MSB_B" };
+                int reg_index = 0;
+                unsigned int reg_value = 0;
+                if (data != NULL && sscanf((const char *)data, "%d,%x", &reg_index, &reg_value) == 2) {
+                    if (reg_index < 0 || reg_index >= WM8213_REG_SETUP_TOTAL) {
+                        printf("Register index must be 0 to %d\n", WM8213_REG_SETUP_TOTAL - 1);
+                        return 0;
+                    }
+                    rgbScannerEnable(false);
+                    uint res = wm8213_afe_set_setup_byte(reg_index, reg_value & 0xFF, true);
+                    rgbScannerEnable(true);
+                    printf("%s[%d] = 0x%02X%s\n", afe_reg_names[reg_index], reg_index, reg_value & 0xFF,
+                        res > 0 ? " COMMIT FAILED (chip readback mismatch)" : "");
+                } else {
+                    // Anything else (e.g. `afereg dump`) lists all registers
+                    printf("idx name       ram  chip\n");
+                    for (int i = 0; i < WM8213_REG_SETUP_TOTAL; i++) {
+                        uint8_t chip_value = 0;
+                        bool read_ok = wm8213_afe_read_setup_byte(i, &chip_value) == 0;
+                        printf("%2d  %-10s 0x%02X ", i, afe_reg_names[i], wm8213_afe_get_setup_byte(i));
+                        if (read_ok) {
+                            printf("0x%02X\n", chip_value);
+                        } else {
+                            printf("--\n");
+                        }
+                    }
+                    printf("Write: afereg <idx>,<hex> (volatile, boot restores defaults)\n");
+                }
+                }
+                break;
 #ifdef TEST_MODE
 			case 'k': {
 				printf("Storing key: %s\n", (const char *)data);
