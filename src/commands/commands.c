@@ -94,6 +94,45 @@ static inline uint8_t command_clamp_uint8(int value) {
     return value < 0 ? 0 : (value > 255 ? 255 : value);
 }
 
+// Keep the stored display slot in sync with console porch changes so `save`
+// persists them (the menu paths do their own syncing)
+static void command_sync_h_porch_settings() {
+    display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+    display->h_front_porch = GET_VIDEO_PROPS().horizontal_front_porch;
+    display->h_back_porch  = GET_VIDEO_PROPS().horizontal_back_porch;
+}
+
+static void command_sync_v_porch_settings() {
+    display_t *display = &(settings_get()->displays[settings_get()->flags.default_display]);
+    display->v_front_porch = GET_VIDEO_PROPS().vertical_front_porch;
+    display->v_back_porch  = GET_VIDEO_PROPS().vertical_back_porch;
+}
+
+// Switch to a display slot (0 based) applying its full config: AFE calibration,
+// video timing and capture reconfiguration. Shared by the menu and the console.
+void command_select_display(uint display_no) {
+    settings_get()->flags.default_display = display_no;
+    display_t *display = &(settings_get()->displays[display_no]);
+
+    // Gain and negative offset do not commit changes, offset commits all
+    wm8213_afe_update_gain(display->gain.red, display->gain.green, display->gain.blue, false);
+    wm8213_afe_update_negative_offset(display->offset.negative, false);
+    wm8213_afe_update_offset(display->offset.red, display->offset.green, display->offset.blue, true);
+    // Timing and aligment
+    // Stored fine_tune is in spinbox units (1 = 1kHz), video_props wants Hz
+    set_video_props(display->v_front_porch, display->v_back_porch,
+        display->h_front_porch, display->h_back_porch,
+        GET_VIDEO_PROPS().width, GET_VIDEO_PROPS().height, display->refresh_rate, 1000 * display->fine_tune, settings_get()->flags.symbols_per_word, GET_VIDEO_PROPS().video_buffer);
+    rgbScannerUpdateData(GET_VIDEO_PROPS().vertical_front_porch, 0);
+    rgbScannerEnable(false);
+    // wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
+    wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
+    rgbScannerEnable(true);
+}
+
+
+
+
 int command_on_receive(int option, const void *data, bool convert) {
     int   integer_value = 0;
     bool  bool_value = false;
@@ -319,6 +358,7 @@ int command_on_receive(int option, const void *data, bool convert) {
 
                 // Changing the total horizontal porch changes the pixel clock,
                 // so recompute the sampling rate and reconfigure the AFE 
+                command_sync_h_porch_settings();
                 update_sampling_rate();
                 rgbScannerEnable(false);
                 wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
@@ -363,6 +403,21 @@ int command_on_receive(int option, const void *data, bool convert) {
                     printf("Write: afereg <idx>,<hex> (volatile, boot restores defaults)\n");
                 }
                 }
+                break;
+            // retore setting (slot)
+            case 'y':
+                if (integer_value < 1 || integer_value > SETTINGS_DISPLAY_MAX) {
+                    printf("Display slot must be 1 to %d\n", SETTINGS_DISPLAY_MAX);
+                    return 0;
+                }
+                command_select_display(integer_value - 1);
+                printf("Display slot %d selected\n", integer_value);
+                break;
+            // save settings
+            case 's':
+                rgbScannerEnable(false);
+                command_save_settings();
+                command_reboot(); // A software reboot is required after storing the new settings
                 break;
 #ifdef TEST_MODE
 			case 'k': {

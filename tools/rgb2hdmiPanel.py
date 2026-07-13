@@ -770,6 +770,8 @@ class App:
                    command=lambda: self.worker.send("info true")).pack(side="left", padx=1)
         ttk.Button(row, text="Off", width=4,
                    command=lambda: self.worker.send("info false")).pack(side="left", padx=1)
+        
+        self.set_enabled(row, False)
 
         row = ttk.Frame(g)
         row.pack(fill="x", pady=1)
@@ -783,6 +785,8 @@ class App:
         self._autowire(self.tmds_slew, send_tmds)
         ttk.Button(row, text="Set", width=5, command=send_tmds).pack(side="left", padx=2)
 
+        self.set_enabled(row, False)
+
         row = ttk.Frame(g)
         row.pack(fill="x", pady=(4, 1))
         ttk.Label(row, text="USB console on boot").pack(side="left")
@@ -793,7 +797,8 @@ class App:
         ttk.Button(row, text="Reboot", width=7,
                    command=self.confirm_reboot).pack(side="left", padx=6)
 
-        self.set_enabled(g, False)
+        self.set_enabled(row, False)
+
 
     def confirm_reboot(self):
         if messagebox.askyesno("Reboot", "Reboot the device now?"):
