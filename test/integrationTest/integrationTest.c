@@ -217,7 +217,8 @@ int main() {
 
     // Configure scan video properties
     display_t *current_display = &(settings_get()->displays[settings_get()->flags.default_display]);
-    set_video_props(current_display->v_front_porch, current_display->v_back_porch, current_display->h_front_porch, current_display->h_back_porch, settings_get()->flags.symbols_per_word ? FRAME_WIDTH_16_BITS : FRAME_WIDTH_8_BITS, FRAME_HEIGHT, current_display->refresh_rate, current_display->fine_tune, settings_get()->flags.symbols_per_word, genbuf);
+    // Stored fine_tune is in spinbox units (1 = 1kHz), video_props wants Hz
+    set_video_props(current_display->v_front_porch, current_display->v_back_porch, current_display->h_front_porch, current_display->h_back_porch, settings_get()->flags.symbols_per_word ? FRAME_WIDTH_16_BITS : FRAME_WIDTH_8_BITS, FRAME_HEIGHT, current_display->refresh_rate, 1000 * current_display->fine_tune, settings_get()->flags.symbols_per_word, genbuf);
     
     // Do early init of config and update Gain & offset from stored settings
     wm8213_afe_init(&afec_cfg);
@@ -281,6 +282,16 @@ int main() {
 
     // Remove info screen if license is valid
     command_show_info(!command_is_license_valid());
+
+    // Boot resync: between wm8213_afe_start and the scanner arming its first
+    // DMA, the gated capture SM has been running on every HSYNC with no
+    // consumer - it stalls mid-line with a stale FIFO and that state persists
+    // into normal operation (image only recovers after a manual slot reload,
+    // which performs this same rebuild). Rebuild the capture once now that
+    // per-line arming is active and everything is settled
+    rgbScannerEnable(false);
+    wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
+    rgbScannerEnable(true);
 
     // Show Version
     command_on_receive('v', NULL, false);

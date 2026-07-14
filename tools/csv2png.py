@@ -11,7 +11,9 @@ def processRGBFromFile(file):
     firstArray = (file.readline()).split(',')
     width = len(firstArray)
     wordSize = len(firstArray[0]) * 4
-    rgbArray = np.loadtxt(file, delimiter = ',', dtype='int16', converters = {_:lambda s: int(s, 16) for _ in range(width)})
+    # RGB565 words are unsigned: int16 overflows on any pixel with the top bit
+    # set (red >= 16, e.g. bright/white content like 0xFFDF)
+    rgbArray = np.loadtxt(file, delimiter = ',', dtype='uint16', converters = {_:lambda s: int(s, 16) for _ in range(width)})
     return processArrayToRGBImage(rgbArray, wordSize)
 
 def processArrayToRGBImage(array, wordSize):
