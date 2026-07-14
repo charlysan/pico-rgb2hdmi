@@ -234,7 +234,7 @@ int command_on_receive(int option, const void *data, bool convert) {
                 printf("STATUS slot=%d bpp=%d w=%d h=%d refresh=%d finetune=%d phase=%d "
                        "hf=%d hb=%d vf=%d vb=%d rate=%d "
                        "gain=%d,%d,%d offset=%d,%d,%d neg=%d "
-                       "usb=%d sync=%d hsyncns=%u vsyncns=%lu lines=%d\n",
+                       "usb=%d sync=%d hsyncns=%u vsyncns=%lu lines=%d scanlines=%u\n",
                     settings_get()->flags.default_display + 1,
                     bppx_to_int(command_get_current_bppx(), color_part_all),
                     GET_VIDEO_PROPS().width, GET_VIDEO_PROPS().height,
@@ -252,7 +252,8 @@ int command_on_receive(int option, const void *data, bool convert) {
                     // don't display stale rates after the source is unplugged
                     rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetHsyncNanoSec() : 0,
                     rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetVsyncNanoSec() : 0,
-                    rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetHorizontalLines() : 0);
+                    rgbScannerGetSyncType() != rgbscan_sync_none ? rgbScannerGetHorizontalLines() : 0,
+                    (bool)settings_get()->flags.scan_line);
                 }
                 break;
             // gain
@@ -450,6 +451,13 @@ int command_on_receive(int option, const void *data, bool convert) {
                 command_save_settings();
                 command_reboot(); // A software reboot is required after storing the new settings
                 break;
+            case 'N': {
+                bool scanline_opt = !settings_get()->flags.scan_line;
+                settings_get()->flags.scan_line = scanline_opt;
+                dvi0.scan_line = scanline_opt;
+                printf("Scanlines %s.\n", scanline_opt ? "enabled" : "disabled");
+            }
+            break;
 #ifdef TEST_MODE
 			case 'k': {
 				printf("Storing key: %s\n", (const char *)data);

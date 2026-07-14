@@ -573,6 +573,12 @@ class App:
             for widget, value in zip(self.offset_rgb, offset):
                 self._set_widget(widget, value)
         self._set_widget(self.negoffset, st.get("neg"))
+        scanlines = st.get("scanlines")
+        if scanlines is not None:
+            try:
+                self.scanlines.set(bool(int(scanlines)))
+            except (ValueError, tk.TclError):
+                pass
 
     # ---- position (D-pad) ----
     def _build_position(self, parent):
@@ -636,6 +642,7 @@ class App:
         # Locked: moving one porch counter-moves the other, keeping the sum
         # (i.e. the sampling rate) constant - pure position moves.
         self.porch_lock = tk.BooleanVar(value=True)
+        self.scanlines = tk.BooleanVar(value=False)
         self.porch_front.configure(command=lambda: self._porch_spun(0))
         self.porch_back.configure(command=lambda: self._porch_spun(1))
         self.porch_front.bind("<Return>", lambda _e: send_porch())
@@ -757,7 +764,8 @@ class App:
         for label, cmd in (("Show", "show"), ("Mode", "mode"), ("ID", "id"), ("Version", "version")):
             ttk.Button(row, text=label, width=7,
                        command=lambda c=cmd: self.worker.send(c)).pack(side="left", padx=1)
-
+        ttk.Checkbutton(row, text="Scanlines", variable=self.scanlines,
+                        command=lambda: self.worker.send("scanlines")).pack(side="left", padx=2)
         row = ttk.Frame(g)
         row.pack(fill="x", pady=(4, 1))
         ttk.Label(row, text="DVI").pack(side="left")
