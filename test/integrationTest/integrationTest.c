@@ -37,7 +37,8 @@ uint8_t genbuf[FRAME_HEIGHT][FRAME_WIDTH_8_BITS];
 uint8_t  *framebuf_8  = GET_RGB8_BUFFER(genbuf);
 uint16_t *framebuf_16 = GET_RGB16_BUFFER(genbuf);
 #define VREG_VSEL       VREG_VOLTAGE_1_20
-#define DVI_TIMING      dvi_timing_640x480p_60hz
+// Use 61hz variant
+#define DVI_TIMING      dvi_timing_640x480p_61hz
 #define CMD_PROMPT      "rgb2hdmi> "
 
 // --------- Global register start --------- 
