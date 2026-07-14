@@ -225,6 +225,9 @@ int main() {
     wm8213_afe_update_negative_offset(current_display->offset.negative, false);
 
     // Configure AFE Capture System from afe config local
+    // The gated capture SM emits exactly this many samples per HSYNC (converted
+    // porch units at 16bpp - same units wm8213_afe_capture_run consumes)
+    wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
     command_info_afe_error = wm8213_afe_start(GET_VIDEO_PROPS().sampling_rate);
     if ( command_info_afe_error > 0) {
          printf("AFE initialize failed with error %d\n", command_info_afe_error);

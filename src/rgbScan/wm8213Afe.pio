@@ -6,12 +6,28 @@
 ; OP   ===>.<===R===>.<===G===>.<===B===>.<===R===>.<===G===>.<===B===>
 ;          1    2    3    4    5    6
 ;               C         C         C
+;
+; side | binary (M R V) | MCLK | RSMP | VSMP
+; -----+----------------+------+------+-----
+;   0  |      000       |  0   |  0   |  0
+;   1  |      001       |  0   |  0   |  1
+;   2  |      010       |  0   |  1   |  0
+;   3  |      011       |  0   |  1   |  1
+;   4  |      100       |  1   |  0   |  0
+;   5  |      101       |  1   |  0   |  1
+;   6  |      110       |  1   |  1   |  0
+;   7  |      111       |  1   |  1   |  1
+;
+
 .program  afe_capture_565
 .side_set 3
 public start:
     nop             side 6;
 .wrap_target              ; 12 Clocks per pixel
-    nop             side 6;
+    wait 0 gpio 27  side 6; wait for hsync
+    wait 1 gpio 27  side 6;
+    mov y, x        side 6;
+pixel:
     mov osr, pins   side 0; Capture RED into OSR
     out null, 1     side 0; Drop 1 LSB
     in  osr, 5      side 4; Shift into ISR 5 bits
@@ -23,6 +39,7 @@ public start:
     mov osr, pins   side 0; Capture BLUE into OSR
     out null, 1     side 0; Drop 1 LSB
     in  osr, 5      side 6; Shift into ISR 5 bits
+    jmp y-- pixel   side 6;
 .wrap
 
 .program  afe_capture_565_inverted
@@ -30,7 +47,10 @@ public start:
 public start:
     nop             side 5;
 .wrap_target              ; 12 Clocks per pixel
-    nop             side 5;
+    wait 0 gpio 27  side 5; wait for hsync
+    wait 1 gpio 27  side 5;
+    mov y, x        side 5;
+pixel:
     mov osr, pins   side 0; Capture RED into OSR
     out null, 1     side 0; Drop 1 LSB
     in  osr, 5      side 4; Shift into ISR 5 bits
@@ -42,6 +62,7 @@ public start:
     mov osr, pins   side 0; Capture BLUE into OSR
     out null, 1     side 0; Drop 1 LSB
     in  osr, 5      side 5; Shift into ISR 5 bits
+    jmp y-- pixel   side 5;
 .wrap
 
 .program  afe_capture_332
@@ -49,7 +70,10 @@ public start:
 public start:
     nop             side 6;
 .wrap_target              ; 12 Clocks per pixel
-    nop             side 6;
+    wait 0 gpio 27  side 6; wait for hsync
+    wait 1 gpio 27  side 6;
+    mov y, x        side 6;
+pixel:
     in pins, 3      side 0; Capture RED 3 bits directly into ISR
     nop             side 0; Drop 1 LSB
     nop             side 4; Shift into ISR 5 bits
@@ -61,6 +85,7 @@ public start:
     mov osr, pins   side 0; Capture BLUE into OSR
     out null, 1     side 0; Drop 1 LSB
     in  osr, 2      side 6; Shift into ISR 2 bits
+    jmp y-- pixel   side 6;
 .wrap
 
 .program  afe_capture_332_inverted
@@ -68,7 +93,10 @@ public start:
 public start:
     nop             side 5;
 .wrap_target              ; 12 Clocks per pixel
-    nop             side 5;
+    wait 0 gpio 27  side 5; wait for hsync
+    wait 1 gpio 27  side 5;
+    mov y, x        side 5;
+pixel:
     in pins, 3      side 0; Capture RED 3 bits directly into ISR
     nop             side 0; Drop 1 LSB
     nop             side 4; Shift into ISR 5 bits
@@ -80,13 +108,19 @@ public start:
     mov osr, pins   side 0; Capture BLUE into OSR
     out null, 1     side 0; Drop 1 LSB
     in  osr, 2      side 5; Shift into ISR 2 bits
+    jmp y-- pixel   side 5;
 .wrap
 
 % c-sdk {
 #include "hardware/clocks.h"
-#define AFE_CTRL_BITS        3
-#define AFE_CLOCKS_PER_PIXEL 12
-static inline void afe_capture_program_init(PIO pio, uint sm, uint offset, uint sampling_rate, uint op_pins, uint control_pins, uint op_bits) {
+#define AFE_CTRL_BITS          3
+#define AFE_CLOCKS_PER_PIXEL   12
+#define AFE_PARK_SIDE          6   
+#define AFE_PARK_SIDE_INVERTED 5
+// Instruction slots relative to the load offset (identical in all 4 programs)                                              
+#define AFE_WAIT_FALL_OFFSET   1                              
+#define AFE_WAIT_RISE_OFFSET   2 
+static inline void afe_capture_program_init(PIO pio, uint sm, uint offset, uint sampling_rate, uint op_pins, uint control_pins, uint op_bits, uint hsync_pin, uint line_samples, uint park_side) {
     //OP pins are just for reading the AFE 6bits output
     pio_sm_set_consecutive_pindirs(pio, sm, op_pins, op_bits, false);
 
@@ -102,7 +136,13 @@ static inline void afe_capture_program_init(PIO pio, uint sm, uint offset, uint 
     }
 
     pio_sm_config c = afe_capture_565_program_get_default_config(offset);  
-    
+
+    // Patch the HSYNC waits with the configured pin (the source encodes a placeholder). 
+    // `wait gpio` reads the raw input synchronizer, so it works regardless of the pin's 
+    // function select and coexists with the SIO IRQ the scanner uses on the same pin.                      
+    uint side = pio_encode_sideset(AFE_CTRL_BITS, park_side); 
+    pio->instr_mem[offset + AFE_WAIT_FALL_OFFSET] = pio_encode_wait_gpio(false, hsync_pin) | side;                          
+    pio->instr_mem[offset + AFE_WAIT_RISE_OFFSET] = pio_encode_wait_gpio(true,  hsync_pin) | side;                          
     sm_config_set_in_shift(&c, false, true, op_bits == 3? 8 : 16); //The IN shifting is just done by the number of bits being fed until 8/16 bits
     sm_config_set_out_shift(&c, true, false, 0); //The OUT shifting is used to get the MSB into the ISR
 
@@ -114,6 +154,16 @@ static inline void afe_capture_program_init(PIO pio, uint sm, uint offset, uint 
 
     float div = (float)(clock_get_hz(clk_sys) / (float)(AFE_CLOCKS_PER_PIXEL * sampling_rate));
     sm_config_set_clkdiv(&c, div);
+
+    // Preload X = samples per line - 1. The running config joins the RX FIFO, so
+    // load through a temporary un-joined config while the SM is still disabled;
+    // X and Y survive the pio_sm_restart performed by pio_sm_init.
+    pio_sm_config loader = c;
+    sm_config_set_fifo_join(&loader, PIO_FIFO_JOIN_NONE);
+    pio_sm_init(pio, sm, offset, &loader);
+    pio_sm_put(pio, sm, line_samples - 1);
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true) | side);
+    pio_sm_exec(pio, sm, pio_encode_out(pio_x, 32)    | side);
 
     pio_sm_init(pio, sm, offset, &c);
 }
