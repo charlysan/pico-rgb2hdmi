@@ -3,10 +3,28 @@ pico rgb2hdmi
 
 An rpi pico microprocessed rgb 2 hdmi plus rgb 2 usb on the fly converter
 -------------------------------------------------------------------------
+Date: 2026/07/13
+Version: 0.7.0
+- Implement HSYNC line detection using PIO
+- Add 640x480p 61Hz DVI timing (258MHz bit clock)
+- Implement sub-pixel sampling phase (0-11/12ths of a pixel) via runtime-patched
+  PIO instruction delays
+- Recompute the SM line count on every porch/width change (left/right/porch/
+  pixelw commands, OSD alignment, slot switch)
+- Add capture resync at end of boot
+- Add new console commands:
+  * refresh / phase
+  * porch / pixelw
+  * slot / save
+  * scanlines
+  * afereg (WM8213 register access)
+- Add rgb2hdmiPanel.py: Tk control panel over the USB console
+- Fix: csv2png decoded RGB565 words as signed int16 (crashed on bright pixels)
+-------------------------------------------------------------------------
 Date: 2026/07/12
-Version: 0.6.4
+Version: 0.6.5
 - Add pico-rgb2hdmi control panel
-- Implement echo in serial console
+- Add interactive serial console (prompt, echo, backspace, CR/LF support)
 - Add new console commands: show, status, pixelw, refresh, porch, gain, finetune, offset and negoffset
 -------------------------------------------------------------------------
 Date: 2024/02/22

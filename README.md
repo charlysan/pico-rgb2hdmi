@@ -76,6 +76,13 @@ This generates as output image.png
 python .\rgb2hdmiGui.py
 ```
 
+## Running alternative `pico-rgb2hdmi Control Panel` GUI
+
+```
+pip install -r requirements.txt
+python tools/rgb2hdmiPanel.py
+```
+
 ## Packaging the python app as a native app
 ```
 pyinstaller -w -F rgb2hdmiGui.py
@@ -90,6 +97,20 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug
 Go to the specific folder and
 
 `make -j4`
+
+## Build using Docker
+
+You must use Pico-sdk: 1.5.1
+
+First, start a container (from root folder)
+```
+docker run -d -it --name pico-sdk --mount type=bind,source=${PWD},target=/home/dev lukstep/raspberry-pi-pico-sdk:v0.0.1
+```
+
+Then you can build using that container
+```
+docker exec -it pico-sdk sh -c "cd /home/dev/build && cmake .. && make -j4"
+```
 
 # Visual Studio Code integration
 Install the extensions as explained in the  [Pico Getting started manual](https://datasheets.raspberrypi.org/pico/getting-started-with-pico.pdf)
