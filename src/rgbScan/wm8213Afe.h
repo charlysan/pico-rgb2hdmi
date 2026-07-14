@@ -53,7 +53,6 @@
 
 #define AFE_SAMPLING_LIMIT           7600000 //Should be 8MSPS but proben to be less, After this value RSMP / VSMP has to be flipped
 #define AFE_PIO_FIFO_FORCE_DUMP      8
-#define AFE_LINE_EXTRA_SAMPLES       1 //Extra sample per line so the tail discard DMA always has >= 1 transfer (no zero-count chain trigger)
 #define WM8213_GAIN_BITS             (1 << 9)
 #define WM8213_GAIN_MAX              (WM8213_GAIN_BITS - 1)
 #define WM8213_POS_OFFSET_BITS       (1 << 8)
@@ -157,12 +156,15 @@ typedef struct wm8213_afe_config {
 	uint                sm_afe;
     uint                pin_base_afe_op;
     uint                pin_base_afe_ctrl;
+    uint                pin_hsync;      //Capture SM gates each line on this GPIO (must match the scanner HSYNC pin)
 } wm8213_afe_config_t;
 
 typedef struct wm8213_afe_capture {
     uint capture_dma;
     uint front_porch_dma;
     uint sampling_rate;
+    uint line_samples;  //Exact samples the gated SM emits per HSYNC = front porch + width (converted units)
+    uint phase;         //Sub-pixel sampling phase, 0..11 PIO clocks (12ths of a pixel) after the HSYNC edge
     uint pio_offset;
     color_bppx bppx;
     wm8213_afe_setups_t setups;
@@ -174,18 +176,32 @@ void wm8213_afe_init(const wm8213_afe_config_t* config);
 int  wm8213_afe_start(uint sampling_rate);
 
 static inline bool wm8213_afe_capture_run(uint hFrontPorch, uintptr_t buffer, uint size) {
-    dma_channel_hw_addr(wm8213_afe_capture_global.front_porch_dma)->al1_transfer_count_trig = hFrontPorch;
-    
-    //Don't interrupt running DMAs!
+    //With the gated SM the accounting is strict: the SM emits exactly
+    //line_samples per HSYNC and this arm must consume exactly as many
+    //(hFrontPorch discarded + size captured). The busy checks come FIRST and
+    //the porch write LAST, because that write is the trigger that starts the
+    //chain: triggering early would restart a chain whose previous line is
+    //still draining
     uint capture_dma = wm8213_afe_capture_global.capture_dma;
-    if (dma_channel_is_busy(capture_dma)) {
+    if (dma_channel_is_busy(wm8213_afe_capture_global.front_porch_dma) ||
+        dma_channel_is_busy(capture_dma)) {
         return false;
     }
-    
+
     dma_channel_hw_addr(capture_dma)->al1_write_addr = buffer;
     dma_channel_hw_addr(capture_dma)->transfer_count = size;
+    dma_channel_hw_addr(wm8213_afe_capture_global.front_porch_dma)->al1_transfer_count_trig = hFrontPorch;
     return true;
 }
+
+//Samples the gated SM emits per line; must equal what every arm consumes.
+//Call before wm8213_afe_start and again (commit=true) on any porch/width change
+uint wm8213_afe_capture_set_line_length(uint porch_plus_width, bool commit);
+
+//Sub-pixel sampling phase 0..11: shifts every sampling instant in 12ths of a
+//pixel. With the rate locked this decides whether samples land mid-pixel
+//(stable) or on the transitions (uniform shimmer)
+uint wm8213_afe_capture_set_phase(uint phase, bool commit);
 
 void wm8213_afe_capture_stop();
 void wm8213_afe_capture_wait();

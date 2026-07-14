@@ -28,6 +28,23 @@ const struct dvi_timing __dvi_const(dvi_timing_640x480p_60hz) = {
 	.bit_clk_khz       = 252000
 };
 
+// VGA at a ~2.4% faster bit clock (61.4Hz frame, slightly out of spec)
+const struct dvi_timing __dvi_const(dvi_timing_640x480p_61hz) = {
+	.h_sync_polarity   = false,
+	.h_front_porch     = 16,
+	.h_sync_width      = 96,
+	.h_back_porch      = 48,
+	.h_active_pixels   = 640,
+
+	.v_sync_polarity   = false,
+	.v_front_porch     = 10,
+	.v_sync_width      = 2,
+	.v_back_porch      = 33,
+	.v_active_lines    = 480,
+
+	.bit_clk_khz       = 258000
+};
+
 // SVGA -- completely by-the-book but requires 400 MHz clk_sys
 const struct dvi_timing __dvi_const(dvi_timing_800x600p_60hz) = {
 	.h_sync_polarity   = false,

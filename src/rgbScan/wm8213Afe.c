@@ -8,6 +8,7 @@
 static uint        afe_cs = -1;
 static spi_inst_t *afe_spi;
 static bool        spi_write_only_mode = true;
+static bool        afe_dma_prepared = false;
 uint16_t           dummy_dma_read;
 
 //Global Afe Capture vars
@@ -112,19 +113,31 @@ uint wm8213_afe_capture_setup() {
     if (wm8213_afe_capture_global.config == NULL) {
         return 1;
     }
+    if (wm8213_afe_capture_global.line_samples == 0) {
+        return 7; //wm8213_afe_capture_set_line_length was never called
+    }
     pio_sm_set_enabled(wm8213_afe_capture_global.config->pio, wm8213_afe_capture_global.config->sm_afe, false);
-    
+
+    // A reconfigure can land while the line DMA chain is armed or mid-transfer;
+    // abort both channels so the rebuilt SM + FIFO and the chain restart
+    // from a known state (channels only exist after afe_dma_prepare ran)
+    if (afe_dma_prepared) {
+        dma_channel_abort(wm8213_afe_capture_global.front_porch_dma);
+        dma_channel_abort(wm8213_afe_capture_global.capture_dma);
+    }
+
     const pio_program_t *program = NULL;
+    bool    inverted = wm8213_afe_capture_global.sampling_rate > AFE_SAMPLING_LIMIT;
     uint8_t op_bits = 0;
     uint    op_pins = 0;
     switch (wm8213_afe_capture_global.bppx) {
         case rgb_8_332:
-            program = (wm8213_afe_capture_global.sampling_rate > AFE_SAMPLING_LIMIT) ? &afe_capture_332_inverted_program : &afe_capture_332_program; 
+            program = inverted ? &afe_capture_332_inverted_program : &afe_capture_332_program;
             op_bits = 3;
             op_pins = wm8213_afe_capture_global.config->pin_base_afe_op + 3;
             break;
         case rgb_16_565:
-            program = (wm8213_afe_capture_global.sampling_rate > AFE_SAMPLING_LIMIT) ? &afe_capture_565_inverted_program : &afe_capture_565_program; 
+            program = inverted ? &afe_capture_565_inverted_program : &afe_capture_565_program;
             op_bits = 6;
             op_pins = wm8213_afe_capture_global.config->pin_base_afe_op;
             break;
@@ -140,7 +153,9 @@ uint wm8213_afe_capture_setup() {
     }
 
     wm8213_afe_capture_global.pio_offset = pio_add_program(wm8213_afe_capture_global.config->pio, program);
-    afe_capture_program_init(wm8213_afe_capture_global.config->pio, wm8213_afe_capture_global.config->sm_afe, wm8213_afe_capture_global.pio_offset, wm8213_afe_capture_global.sampling_rate, op_pins, wm8213_afe_capture_global.config->pin_base_afe_ctrl, op_bits);
+    // afe_capture_program_init(wm8213_afe_capture_global.config->pio, wm8213_afe_capture_global.config->sm_afe, wm8213_afe_capture_global.pio_offset, wm8213_afe_capture_global.sampling_rate, op_pins, wm8213_afe_capture_global.config->pin_base_afe_ctrl, op_bits);
+    afe_capture_program_init(wm8213_afe_capture_global.config->pio, wm8213_afe_capture_global.config->sm_afe, wm8213_afe_capture_global.pio_offset, wm8213_afe_capture_global.sampling_rate, op_pins, wm8213_afe_capture_global.config->pin_base_afe_ctrl, op_bits,
+        wm8213_afe_capture_global.config->pin_hsync, wm8213_afe_capture_global.line_samples, inverted ? AFE_PARK_SIDE_INVERTED : AFE_PARK_SIDE, wm8213_afe_capture_global.phase);
     
     // Give DMA R/W priority over the Bus
     //bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
@@ -159,6 +174,29 @@ uint wm8213_afe_capture_update_bppx(color_bppx bppx, bool commit) {
         return wm8213_afe_capture_setup();
     }
     return 0;
+}
+
+uint wm8213_afe_capture_set_line_length(uint porch_plus_width, bool commit) {
+    // Two-channel accounting: the SM emits EXACTLY what the porch discard +
+    // capture consume per line. This holds for the OSD overlay too because it
+    // grows the porch by exactly what it shrinks the width (left placement)
+    wm8213_afe_capture_global.line_samples = porch_plus_width;
+    if (commit) {
+        return wm8213_afe_capture_setup();
+    }
+    return 0;
+}
+
+uint wm8213_afe_capture_set_phase(uint phase, bool commit) {
+    wm8213_afe_capture_global.phase = phase > AFE_PHASE_MAX ? AFE_PHASE_MAX : phase;
+    if (commit) {
+        return wm8213_afe_capture_setup();
+    }
+    return 0;
+}
+
+uint wm8213_afe_capture_get_phase() {
+    return wm8213_afe_capture_global.phase;
 }
 
 // AFE DMA related
@@ -194,6 +232,8 @@ void afe_dma_prepare(PIO pio, uint sm) {
         0,              // Size: will be set later
         false
     );
+
+    afe_dma_prepared = true;
 }
 
 //AFE Main calls

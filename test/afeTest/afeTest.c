@@ -20,6 +20,10 @@ int main() {
     printf("AFE initial test \n");
     wm8213_afe_init(&afec_cfg);
     wm8213_afe_capture_update_bppx(rgb_16_565, false);
+    // The capture SM is gated on HSYNC (AFE_HSYNC pin): a sync source must be
+    // connected or captures below will wait forever. Line length matches the
+    // capture_run(1, buf, 32) calls in the loop: porch(1) + width(32)
+    wm8213_afe_capture_set_line_length(1 + 32, false);
     if (wm8213_afe_start(2000000) > 0) {
          printf("AFE initialize failed \n");
     } else {

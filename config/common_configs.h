@@ -43,6 +43,7 @@
     #define AFE_VSMP    20 //Video Sample timing pulse
     #define AFE_RSMP    21 //Reset sample timing pulse
     #define AFE_MCLK    22 //Master ADC Clock
+    #define AFE_HSYNC   27 //Capture SM gates each line on this pin; must match RGB_SCAN_HSYNC_PIN
 
     //VSMP ___________________|‾|___________________________|‾|____________
     //RSMP ____|‾|___________________________|‾|___________________________
@@ -129,7 +130,8 @@
         .pio = pio1,
         .sm_afe = 0,
         .pin_base_afe_op = AFE_OP,
-        .pin_base_afe_ctrl = AFE_VSMP
+        .pin_base_afe_ctrl = AFE_VSMP,
+        .pin_hsync = AFE_HSYNC
     };
 #endif
 

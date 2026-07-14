@@ -37,7 +37,8 @@ uint8_t genbuf[FRAME_HEIGHT][FRAME_WIDTH_8_BITS];
 uint8_t  *framebuf_8  = GET_RGB8_BUFFER(genbuf);
 uint16_t *framebuf_16 = GET_RGB16_BUFFER(genbuf);
 #define VREG_VSEL       VREG_VOLTAGE_1_20
-#define DVI_TIMING      dvi_timing_640x480p_60hz
+// Use 61hz variant
+#define DVI_TIMING      dvi_timing_640x480p_61hz
 #define CMD_PROMPT      "rgb2hdmi> "
 
 // --------- Global register start --------- 
@@ -49,27 +50,29 @@ menu_event_type     menu_event_map[KEYBOARD_N_PINS]     = { menu_event_next, men
 const settings_t factory_settings = GET_FACTORY_SETTINGS();
 cmd_parser_option_t options[] =
 {
-    {"up",      TRUE,  NULL,  'u'},
-    {"down",    TRUE,  NULL,  'd'},
-    {"left",    TRUE,  NULL,  'l'},
-    {"mode",    FALSE, NULL,  'm'},
-    {"right",   TRUE,  NULL,  'r'},
-    {"info",    TRUE,  NULL,  'i'},
-    {"show",    FALSE, NULL,  'S'},
-    {"capture", FALSE, NULL,  'c'},
-    {"id",      FALSE, NULL,  'I'},
-    {"version", FALSE, NULL,  'v'},
-    {"status",  FALSE, NULL,  'q'},
-    {"gain",    TRUE,  NULL,  'g'},
-    {"offset",  TRUE,  NULL,  'o'},
-    {"negoffset", TRUE, NULL, 'n'},
-    {"finetune", TRUE, NULL,  'f'},
-    {"refresh", TRUE,  NULL,  'F'},
-    {"pixelw",  TRUE,  NULL,  'W'},
-    {"porch",   TRUE,  NULL,  'P'},
-    {"afereg",  TRUE,  NULL,  'A'},
-    {"slot",    TRUE,  NULL,  'y'},
-    {"save",    FALSE, NULL,  's'},
+    {"up",        TRUE,  NULL,  'u'},
+    {"down",      TRUE,  NULL,  'd'},
+    {"left",      TRUE,  NULL,  'l'},
+    {"mode",      FALSE, NULL,  'm'},
+    {"right",     TRUE,  NULL,  'r'},
+    {"info",      TRUE,  NULL,  'i'},
+    {"show",      FALSE, NULL,  'S'},
+    {"capture",   FALSE, NULL,  'c'},
+    {"id",        FALSE, NULL,  'I'},
+    {"version",   FALSE, NULL,  'v'},
+    {"status",    FALSE, NULL,  'q'},
+    {"gain",      TRUE,  NULL,  'g'},
+    {"offset",    TRUE,  NULL,  'o'},
+    {"negoffset", TRUE, NULL,   'n'},
+    {"finetune",  TRUE, NULL,   'f'},
+    {"phase",     TRUE,  NULL,  'x'},
+    {"refresh",   TRUE,  NULL,  'F'},
+    {"pixelw",    TRUE,  NULL,  'W'},
+    {"porch",     TRUE,  NULL,  'P'},
+    {"afereg",    TRUE,  NULL,  'A'},
+    {"slot",      TRUE,  NULL,  'y'},
+    {"save",      FALSE, NULL,  's'},
+    {"scanlines", FALSE, NULL,  'N'},
 #ifdef TEST_MODE
     {"keyset",  TRUE,  NULL,  'k'},
     {"keyget",  FALSE, NULL,  'K'},
@@ -215,7 +218,8 @@ int main() {
 
     // Configure scan video properties
     display_t *current_display = &(settings_get()->displays[settings_get()->flags.default_display]);
-    set_video_props(current_display->v_front_porch, current_display->v_back_porch, current_display->h_front_porch, current_display->h_back_porch, settings_get()->flags.symbols_per_word ? FRAME_WIDTH_16_BITS : FRAME_WIDTH_8_BITS, FRAME_HEIGHT, current_display->refresh_rate, current_display->fine_tune, settings_get()->flags.symbols_per_word, genbuf);
+    // Stored fine_tune is in spinbox units (1 = 1kHz), video_props wants Hz
+    set_video_props(current_display->v_front_porch, current_display->v_back_porch, current_display->h_front_porch, current_display->h_back_porch, settings_get()->flags.symbols_per_word ? FRAME_WIDTH_16_BITS : FRAME_WIDTH_8_BITS, FRAME_HEIGHT, current_display->refresh_rate, 1000 * current_display->fine_tune, settings_get()->flags.symbols_per_word, genbuf);
     
     // Do early init of config and update Gain & offset from stored settings
     wm8213_afe_init(&afec_cfg);
@@ -225,6 +229,9 @@ int main() {
     wm8213_afe_update_negative_offset(current_display->offset.negative, false);
 
     // Configure AFE Capture System from afe config local
+    // The gated capture SM emits exactly this many samples per HSYNC (converted
+    // porch units at 16bpp - same units wm8213_afe_capture_run consumes)
+    wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
     command_info_afe_error = wm8213_afe_start(GET_VIDEO_PROPS().sampling_rate);
     if ( command_info_afe_error > 0) {
          printf("AFE initialize failed with error %d\n", command_info_afe_error);
@@ -276,6 +283,16 @@ int main() {
 
     // Remove info screen if license is valid
     command_show_info(!command_is_license_valid());
+
+    // Boot resync: between wm8213_afe_start and the scanner arming its first
+    // DMA, the gated capture SM has been running on every HSYNC with no
+    // consumer - it stalls mid-line with a stale FIFO and that state persists
+    // into normal operation (image only recovers after a manual slot reload,
+    // which performs this same rebuild). Rebuild the capture once now that
+    // per-line arming is active and everything is settled
+    rgbScannerEnable(false);
+    wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
+    rgbScannerEnable(true);
 
     // Show Version
     command_on_receive('v', NULL, false);
