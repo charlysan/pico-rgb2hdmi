@@ -18,7 +18,7 @@ jobs:
         run: |
           docker run --rm \
           -v ${{ github.workspace }}:/home/dev \
-          lukstep/raspberry-pi-pico-sdk:latest \
+          lukstep/raspberry-pi-pico-sdk:v0.0.1 \
           /bin/sh -c \
           "cd /home/dev && mkdir build && cd build && cmake .. && make -j4"
 
