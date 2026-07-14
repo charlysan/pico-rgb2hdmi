@@ -26,7 +26,10 @@ public start:
 .wrap_target              ; 12 Clocks per pixel
     wait 0 gpio 27  side 6; wait for hsync
     wait 1 gpio 27  side 6;
-    mov y, x        side 6;
+    nop             side 6; sub-pixel phase carrier (delay patched at load)
+    nop             side 6; sub-pixel phase carrier (delay patched at load)
+    nop             side 6; sub-pixel phase carrier (delay patched at load)
+    mov y, x        side 6; delay carries the phase remainder
 pixel:
     mov osr, pins   side 0; Capture RED into OSR
     out null, 1     side 0; Drop 1 LSB
@@ -49,7 +52,10 @@ public start:
 .wrap_target              ; 12 Clocks per pixel
     wait 0 gpio 27  side 5; wait for hsync
     wait 1 gpio 27  side 5;
-    mov y, x        side 5;
+    nop             side 5; sub-pixel phase carrier (delay patched at load)
+    nop             side 5; sub-pixel phase carrier (delay patched at load)
+    nop             side 5; sub-pixel phase carrier (delay patched at load)
+    mov y, x        side 5; delay carries the phase remainder
 pixel:
     mov osr, pins   side 0; Capture RED into OSR
     out null, 1     side 0; Drop 1 LSB
@@ -72,7 +78,10 @@ public start:
 .wrap_target              ; 12 Clocks per pixel
     wait 0 gpio 27  side 6; wait for hsync
     wait 1 gpio 27  side 6;
-    mov y, x        side 6;
+    nop             side 6; sub-pixel phase carrier (delay patched at load)
+    nop             side 6; sub-pixel phase carrier (delay patched at load)
+    nop             side 6; sub-pixel phase carrier (delay patched at load)
+    mov y, x        side 6; delay carries the phase remainder
 pixel:
     in pins, 3      side 0; Capture RED 3 bits directly into ISR
     nop             side 0; Drop 1 LSB
@@ -95,7 +104,10 @@ public start:
 .wrap_target              ; 12 Clocks per pixel
     wait 0 gpio 27  side 5; wait for hsync
     wait 1 gpio 27  side 5;
-    mov y, x        side 5;
+    nop             side 5; sub-pixel phase carrier (delay patched at load)
+    nop             side 5; sub-pixel phase carrier (delay patched at load)
+    nop             side 5; sub-pixel phase carrier (delay patched at load)
+    mov y, x        side 5; delay carries the phase remainder
 pixel:
     in pins, 3      side 0; Capture RED 3 bits directly into ISR
     nop             side 0; Drop 1 LSB
@@ -117,10 +129,13 @@ pixel:
 #define AFE_CLOCKS_PER_PIXEL   12
 #define AFE_PARK_SIDE          6   
 #define AFE_PARK_SIDE_INVERTED 5
-// Instruction slots relative to the load offset (identical in all 4 programs)                                              
-#define AFE_WAIT_FALL_OFFSET   1                              
-#define AFE_WAIT_RISE_OFFSET   2 
-static inline void afe_capture_program_init(PIO pio, uint sm, uint offset, uint sampling_rate, uint op_pins, uint control_pins, uint op_bits, uint hsync_pin, uint line_samples, uint park_side) {
+// Instruction slots relative to the load offset (identical in all 4 programs)
+#define AFE_WAIT_FALL_OFFSET   1
+#define AFE_WAIT_RISE_OFFSET   2
+#define AFE_PHASE_OFFSET       3  // 3 consecutive carrier nops
+#define AFE_MOV_YX_OFFSET      6
+#define AFE_PHASE_MAX          11 // PIO clocks of sub-pixel offset (12ths of a pixel)
+static inline void afe_capture_program_init(PIO pio, uint sm, uint offset, uint sampling_rate, uint op_pins, uint control_pins, uint op_bits, uint hsync_pin, uint line_samples, uint park_side, uint phase) {
     //OP pins are just for reading the AFE 6bits output
     pio_sm_set_consecutive_pindirs(pio, sm, op_pins, op_bits, false);
 
@@ -140,9 +155,22 @@ static inline void afe_capture_program_init(PIO pio, uint sm, uint offset, uint 
     // Patch the HSYNC waits with the configured pin (the source encodes a placeholder). 
     // `wait gpio` reads the raw input synchronizer, so it works regardless of the pin's 
     // function select and coexists with the SIO IRQ the scanner uses on the same pin.                      
-    uint side = pio_encode_sideset(AFE_CTRL_BITS, park_side); 
-    pio->instr_mem[offset + AFE_WAIT_FALL_OFFSET] = pio_encode_wait_gpio(false, hsync_pin) | side;                          
-    pio->instr_mem[offset + AFE_WAIT_RISE_OFFSET] = pio_encode_wait_gpio(true,  hsync_pin) | side;                          
+    uint side = pio_encode_sideset(AFE_CTRL_BITS, park_side);
+    pio->instr_mem[offset + AFE_WAIT_FALL_OFFSET] = pio_encode_wait_gpio(false, hsync_pin) | side;
+    pio->instr_mem[offset + AFE_WAIT_RISE_OFFSET] = pio_encode_wait_gpio(true,  hsync_pin) | side;
+
+    // Sub-pixel sampling phase: distribute 0..11 extra PIO clocks over the
+    // delay bits of the three carrier nops and the mov (2 bits each, side_set
+    // uses the other 3). Each extra clock shifts every sampling instant of
+    // the line by 1/12 of a pixel after the HSYNC edge
+    uint p = phase > AFE_PHASE_MAX ? AFE_PHASE_MAX : phase;
+    for (uint i = 0; i < 3; ++i) {
+        uint d = p > 3 ? 3 : p;
+        p -= d;
+        pio->instr_mem[offset + AFE_PHASE_OFFSET + i] = pio_encode_nop() | side | pio_encode_delay(d);
+    }
+    pio->instr_mem[offset + AFE_MOV_YX_OFFSET] = pio_encode_mov(pio_y, pio_x) | side | pio_encode_delay(p);
+
     sm_config_set_in_shift(&c, false, true, op_bits == 3? 8 : 16); //The IN shifting is just done by the number of bits being fed until 8/16 bits
     sm_config_set_out_shift(&c, true, false, 0); //The OUT shifting is used to get the MSB into the ISR
 

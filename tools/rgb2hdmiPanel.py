@@ -659,7 +659,7 @@ class App:
         self.phase.pack(side="left", padx=4)
         send_phase = self._autowire(self.phase, lambda: self.worker.send("phase %s" % _spin(self.phase)))
         ttk.Button(row, text="Set", width=5, command=send_phase).pack(side="left")
-        self.set_enabled(row, False)
+        # self.set_enabled(row, False)
 
         row = ttk.Frame(g)
         row.pack(fill="x", pady=(4, 1))

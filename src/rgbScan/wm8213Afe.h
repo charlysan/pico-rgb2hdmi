@@ -164,6 +164,7 @@ typedef struct wm8213_afe_capture {
     uint front_porch_dma;
     uint sampling_rate;
     uint line_samples;  //Exact samples the gated SM emits per HSYNC = front porch + width (converted units)
+    uint phase;         //Sub-pixel sampling phase, 0..11 PIO clocks (12ths of a pixel) after the HSYNC edge
     uint pio_offset;
     color_bppx bppx;
     wm8213_afe_setups_t setups;
@@ -193,9 +194,14 @@ static inline bool wm8213_afe_capture_run(uint hFrontPorch, uintptr_t buffer, ui
     return true;
 }
 
-//Samples the gated SM emits per line; must equal what every arm consumes.                                                  
-//Call before wm8213_afe_start and again (commit=true) on any porch/width change  
+//Samples the gated SM emits per line; must equal what every arm consumes.
+//Call before wm8213_afe_start and again (commit=true) on any porch/width change
 uint wm8213_afe_capture_set_line_length(uint porch_plus_width, bool commit);
+
+//Sub-pixel sampling phase 0..11: shifts every sampling instant in 12ths of a
+//pixel. With the rate locked this decides whether samples land mid-pixel
+//(stable) or on the transitions (uniform shimmer)
+uint wm8213_afe_capture_set_phase(uint phase, bool commit);
 
 void wm8213_afe_capture_stop();
 void wm8213_afe_capture_wait();

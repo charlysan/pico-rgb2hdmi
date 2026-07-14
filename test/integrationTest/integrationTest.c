@@ -65,6 +65,7 @@ cmd_parser_option_t options[] =
     {"offset",  TRUE,  NULL,  'o'},
     {"negoffset", TRUE, NULL, 'n'},
     {"finetune", TRUE, NULL,  'f'},
+    {"phase",   TRUE,  NULL,  'x'},
     {"refresh", TRUE,  NULL,  'F'},
     {"pixelw",  TRUE,  NULL,  'W'},
     {"porch",   TRUE,  NULL,  'P'},

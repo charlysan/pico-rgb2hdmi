@@ -155,7 +155,7 @@ uint wm8213_afe_capture_setup() {
     wm8213_afe_capture_global.pio_offset = pio_add_program(wm8213_afe_capture_global.config->pio, program);
     // afe_capture_program_init(wm8213_afe_capture_global.config->pio, wm8213_afe_capture_global.config->sm_afe, wm8213_afe_capture_global.pio_offset, wm8213_afe_capture_global.sampling_rate, op_pins, wm8213_afe_capture_global.config->pin_base_afe_ctrl, op_bits);
     afe_capture_program_init(wm8213_afe_capture_global.config->pio, wm8213_afe_capture_global.config->sm_afe, wm8213_afe_capture_global.pio_offset, wm8213_afe_capture_global.sampling_rate, op_pins, wm8213_afe_capture_global.config->pin_base_afe_ctrl, op_bits,
-        wm8213_afe_capture_global.config->pin_hsync, wm8213_afe_capture_global.line_samples, inverted ? AFE_PARK_SIDE_INVERTED : AFE_PARK_SIDE);
+        wm8213_afe_capture_global.config->pin_hsync, wm8213_afe_capture_global.line_samples, inverted ? AFE_PARK_SIDE_INVERTED : AFE_PARK_SIDE, wm8213_afe_capture_global.phase);
     
     // Give DMA R/W priority over the Bus
     //bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
@@ -185,6 +185,18 @@ uint wm8213_afe_capture_set_line_length(uint porch_plus_width, bool commit) {
         return wm8213_afe_capture_setup();
     }
     return 0;
+}
+
+uint wm8213_afe_capture_set_phase(uint phase, bool commit) {
+    wm8213_afe_capture_global.phase = phase > AFE_PHASE_MAX ? AFE_PHASE_MAX : phase;
+    if (commit) {
+        return wm8213_afe_capture_setup();
+    }
+    return 0;
+}
+
+uint wm8213_afe_capture_get_phase() {
+    return wm8213_afe_capture_global.phase;
 }
 
 // AFE DMA related

@@ -209,7 +209,7 @@ int command_on_receive(int option, const void *data, bool convert) {
                     GET_VIDEO_PROPS().horizontal_front_porch, GET_VIDEO_PROPS().horizontal_back_porch,
                     GET_VIDEO_PROPS().vertical_front_porch, GET_VIDEO_PROPS().vertical_back_porch);
                 printf("Sampling rate: %u Hz\n", (unsigned int)GET_VIDEO_PROPS().sampling_rate);
-                // printf("Sampling phase: %d/12\n", wm8213_afe_capture_get_phase());
+                printf("Sampling phase: %d/12\n", wm8213_afe_capture_get_phase());
                 }
                 break;
             case 'q': {
@@ -222,7 +222,7 @@ int command_on_receive(int option, const void *data, bool convert) {
                     settings_get()->flags.default_display + 1,
                     bppx_to_int(command_get_current_bppx(), color_part_all),
                     GET_VIDEO_PROPS().width, GET_VIDEO_PROPS().height,
-                    GET_VIDEO_PROPS().refresh_rate, display->fine_tune, 0, // TODO wm8213_afe_capture_get_phase(),
+                    GET_VIDEO_PROPS().refresh_rate, display->fine_tune, wm8213_afe_capture_get_phase(),
                     GET_VIDEO_PROPS().horizontal_front_porch, GET_VIDEO_PROPS().horizontal_back_porch,
                     GET_VIDEO_PROPS().vertical_front_porch, GET_VIDEO_PROPS().vertical_back_porch,
                     GET_VIDEO_PROPS().sampling_rate,
@@ -290,6 +290,16 @@ int command_on_receive(int option, const void *data, bool convert) {
                 wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
                 rgbScannerEnable(true);
                 printf("Fine tune set to %d (sampling rate %d Hz)\n", integer_value, GET_VIDEO_PROPS().sampling_rate);
+                }
+                break;
+            // sub-pixel sampling phase
+            case 'x': {
+                if (integer_value < 0)  { integer_value = 0; }
+                if (integer_value > 11) { integer_value = 11; }
+                rgbScannerEnable(false);
+                wm8213_afe_capture_set_phase(integer_value, true);
+                rgbScannerEnable(true);
+                printf("Sampling phase set to %d/12 of a pixel\n", integer_value);
                 }
                 break;
             // refresh
