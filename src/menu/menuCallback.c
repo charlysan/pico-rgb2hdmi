@@ -84,9 +84,13 @@ bool on_alignment_event(gui_status_t status, gui_base_t *origin, gui_object_t *d
         if (spinbox_vertical != GET_VIDEO_PROPS().vertical_front_porch) {
             rgbScannerUpdateData(GET_VIDEO_PROPS().vertical_front_porch, 0);
         }
-        if (spinbox_pix_width != GET_VIDEO_PROPS().horizontal_front_porch + GET_VIDEO_PROPS().horizontal_back_porch) {
+        // Horizontal changes alter the gated SM's per-line sample count (and
+        // the sampling rate when the total porch changed); recommit both
+        if (spinbox_horizontal != GET_VIDEO_PROPS().horizontal_front_porch ||
+            spinbox_pix_width != GET_VIDEO_PROPS().horizontal_front_porch + GET_VIDEO_PROPS().horizontal_back_porch) {
             update_sampling_rate();
             rgbScannerEnable(false);
+            wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
             wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
             rgbScannerEnable(true);
         }
@@ -129,6 +133,7 @@ bool on_display_selection_event(gui_status_t status, gui_base_t *origin, gui_obj
                 GET_VIDEO_PROPS().width, GET_VIDEO_PROPS().height, menu_current_display->refresh_rate, menu_current_display->fine_tune, settings_get()->flags.symbols_per_word, GET_VIDEO_PROPS().video_buffer);
             rgbScannerUpdateData(GET_VIDEO_PROPS().vertical_front_porch, 0);
             rgbScannerEnable(false);
+            wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
             wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
             rgbScannerEnable(true);
             //Update spinBoxes

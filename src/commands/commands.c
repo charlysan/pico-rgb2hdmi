@@ -108,6 +108,16 @@ static void command_sync_v_porch_settings() {
     display->v_back_porch  = GET_VIDEO_PROPS().vertical_back_porch;
 }
 
+// Any horizontal porch change alters BOTH what each line's DMA consumes and
+// what the gated SM must emit per line: recompute the per-line sample count
+// and rebuild the capture so production and consumption stay equal. Without
+// this, every line leaks the difference into the FIFO and the image scrambles
+static void command_update_line_length(void) {
+    rgbScannerEnable(false);
+    wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, true);
+    rgbScannerEnable(true);
+}
+
 // Switch to a display slot (0 based) applying its full config: AFE calibration,
 // video timing and capture reconfiguration. Shared by the menu and the console.
 void command_select_display(uint display_no) {
@@ -125,7 +135,7 @@ void command_select_display(uint display_no) {
         GET_VIDEO_PROPS().width, GET_VIDEO_PROPS().height, display->refresh_rate, 1000 * display->fine_tune, settings_get()->flags.symbols_per_word, GET_VIDEO_PROPS().video_buffer);
     rgbScannerUpdateData(GET_VIDEO_PROPS().vertical_front_porch, 0);
     rgbScannerEnable(false);
-    // wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
+    wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
     wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
     rgbScannerEnable(true);
 }
@@ -170,11 +180,17 @@ int command_on_receive(int option, const void *data, bool convert) {
                 printf("Move screen right %d positions\n", integer_value);
 				GET_VIDEO_PROPS().horizontal_front_porch += integer_value;
 				GET_VIDEO_PROPS().horizontal_back_porch  -= integer_value;
+
+				command_sync_h_porch_settings();
+				command_update_line_length();
                 break;
             case 'r':
                 printf("Move screen left %d positions\n", integer_value);
 				GET_VIDEO_PROPS().horizontal_front_porch -= integer_value;
 				GET_VIDEO_PROPS().horizontal_back_porch  += integer_value;
+
+				command_sync_h_porch_settings();
+				command_update_line_length();
                 break;
 			case 'i':
 				if (command_license_is_valid) {
@@ -338,9 +354,12 @@ int command_on_receive(int option, const void *data, bool convert) {
                 GET_VIDEO_PROPS().horizontal_back_porch  = back;
 
                 // Changing the total horizontal porch changes the pixel clock,
-                // so recompute the sampling rate and reconfigure the AFE 
+                // so recompute the sampling rate and reconfigure the AFE.
+                // The front porch also changes the gated SM's per-line count
+                command_sync_h_porch_settings();
                 update_sampling_rate();
                 rgbScannerEnable(false);
+                wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
                 wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
                 rgbScannerEnable(true);
 
@@ -367,10 +386,12 @@ int command_on_receive(int option, const void *data, bool convert) {
                 GET_VIDEO_PROPS().horizontal_back_porch  = back;
 
                 // Changing the total horizontal porch changes the pixel clock,
-                // so recompute the sampling rate and reconfigure the AFE 
+                // so recompute the sampling rate and reconfigure the AFE.
+                // The front porch also changes the gated SM's per-line count
                 command_sync_h_porch_settings();
                 update_sampling_rate();
                 rgbScannerEnable(false);
+                wm8213_afe_capture_set_line_length(get_video_prop_horizontal_front_porch() + GET_VIDEO_PROPS().width, false);
                 wm8213_afe_capture_update_sampling_rate(GET_VIDEO_PROPS().sampling_rate);
                 rgbScannerEnable(true);
 
